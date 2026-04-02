@@ -720,6 +720,7 @@ def setup_tray(window, midi, base_dir):
 
 import subprocess
 import winreg
+import psutil
 
 LOOPMIDI_PATHS = [
     r"C:\Program Files (x86)\Tobias Erichsen\loopMIDI\loopMIDI.exe",
@@ -799,6 +800,61 @@ def run_startup_checks(window, base_dir):
             _push(window, 'port', 'Virtual port failed', 'error',
                   f'Could not create {OUTPUT_PORT_NAME} in registry.\n{e}')
             return False, None
+
+    # ── Check 3: Restart loopMIDI ──
+    _push(window, 'loopmidi-restart', 'Restarting loopMIDI', 'active')
+
+    # Set StartMinimized before launching
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Tobias Erichsen\loopMIDI",
+                            access=winreg.KEY_SET_VALUE) as k:
+            winreg.SetValueEx(k, "StartMinimized", 0, winreg.REG_DWORD, 1)
+    except Exception as e:
+        print(f"[Startup] Could not set StartMinimized: {e}")
+
+    # Kill if running
+    try:
+        subprocess.call(
+            ["taskkill", "/F", "/IM", "loopMIDI.exe"],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+    # Small gap to let it die cleanly
+    time.sleep(0.5)
+
+    # Launch it
+    try:
+        subprocess.Popen(
+            [exe_path],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except Exception as e:
+        _push(window, 'loopmidi-restart', 'loopMIDI failed to start', 'error',
+              f'Could not launch loopMIDI: {e}')
+        return False, None
+
+    # Poll until it appears in the process list (max 8 seconds)
+    deadline = time.time() + 8
+    running  = False
+    while time.time() < deadline:
+        if any(p.name().lower() == 'loopmidi.exe'
+               for p in psutil.process_iter(['name'])):
+            running = True
+            break
+        time.sleep(0.3)
+
+    if running:
+        # Give loopMIDI a moment to load its ports after appearing
+        time.sleep(1.0)
+        _push(window, 'loopmidi-restart', 'loopMIDI running', 'done')
+    else:
+        _push(window, 'loopmidi-restart', 'loopMIDI timed out', 'error',
+              'loopMIDI did not start in time. Please launch it manually.')
+        return False, None
 
     return True, exe_path
 
