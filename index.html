@@ -1072,6 +1072,7 @@ const WAVE_SCROLL_MS = 130;
 
 let waveAmps       = Array(WAVE_POINTS).fill(17);
 let waveCurrentAmp = 0;
+let waveInterval   = null;
 
 function pushWave(ev) {
   const amp = (ev.vel !== undefined ? ev.vel / 127
@@ -1080,18 +1081,28 @@ function pushWave(ev) {
   waveCurrentAmp = amp;
 }
 
-// Use setInterval instead of rAF for the data tick — rAF can pause in pywebview
-// when the window is hidden or loses focus. setInterval keeps running.
-setInterval(() => {
-  const idle = 17 + (Math.random() - 0.5) * 1.5;
-  const y    = idle - waveCurrentAmp * 12;
-  waveAmps.push(y);
-  if (waveAmps.length > WAVE_POINTS) waveAmps.shift();
-  waveCurrentAmp = Math.max(0, waveCurrentAmp * 0.6);
+function startWave() {
+  if (waveInterval) return;
+  document.getElementById('waveLine').setAttribute('points', '');
+  waveAmps       = Array(WAVE_POINTS).fill(17);
+  waveCurrentAmp = 0;
+  waveInterval = setInterval(() => {
+    const idle = 17 + (Math.random() - 0.5) * 1.5;
+    const y    = idle - waveCurrentAmp * 12;
+    waveAmps.push(y);
+    if (waveAmps.length > WAVE_POINTS) waveAmps.shift();
+    waveCurrentAmp = Math.max(0, waveCurrentAmp * 0.6);
+    const pts = waveAmps.map((y, i) => `${i * (600 / (WAVE_POINTS - 1))},${y}`).join(' ');
+    document.getElementById('waveLine').setAttribute('points', pts);
+  }, WAVE_SCROLL_MS);
+}
 
-  const pts = waveAmps.map((y, i) => `${i * (600 / (WAVE_POINTS - 1))},${y}`).join(' ');
-  document.getElementById('waveLine').setAttribute('points', pts);
-}, WAVE_SCROLL_MS);
+function stopWave() {
+  if (waveInterval) { clearInterval(waveInterval); waveInterval = null; }
+  waveAmps       = Array(WAVE_POINTS).fill(17);
+  waveCurrentAmp = 0;
+  document.getElementById('waveLine').setAttribute('points', '');
+}
 
 function addLogRow(raw, tx) {
   const log   = document.getElementById('eventLog');
@@ -1145,6 +1156,7 @@ window.onMidiDisconnected = function() {
   document.getElementById('inputChipTxt').textContent = 'Disconnected';
   document.getElementById('sbIn').classList.remove('green');
   document.getElementById('sbInTxt').textContent = 'Disconnected';
+  stopWave();
 };
 function goPage(id, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1242,6 +1254,9 @@ async function pickPort(port) {
     document.getElementById('inputChipTxt').textContent = 'No input';
     document.getElementById('sbIn').classList.remove('green');
     document.getElementById('sbInTxt').textContent = 'No input';
+    stopWave();
+  } else {
+    startWave();
   }
 }
 
