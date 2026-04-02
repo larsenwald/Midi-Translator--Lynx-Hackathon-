@@ -547,7 +547,25 @@ class API:
             return {"error": str(e)}
 
     def move_window(self, x, y):
-        if self._window: self._window.move(int(x), int(y))
+        if self._window:
+            self._window.move(int(x), int(y))
+            self._save_bounds(int(x), int(y), None, None)
+
+    def resize_window(self, w, h, x, y):
+        if self._window:
+            self._window.resize(int(w), int(h))
+            self._window.move(int(x), int(y))
+            self._save_bounds(int(x), int(y), int(w), int(h))
+
+    def _save_bounds(self, x, y, w, h):
+        cfg    = load_config()
+        bounds = cfg.get("window_bounds", {})
+        if x is not None: bounds["x"] = x
+        if y is not None: bounds["y"] = y
+        if w is not None: bounds["w"] = w
+        if h is not None: bounds["h"] = h
+        cfg["window_bounds"] = bounds
+        save_config(cfg)
 
     def minimize(self):
         if self._window: self._window.minimize()
@@ -562,11 +580,6 @@ class API:
 
     def restore(self):
         if self._window: self._window.restore()
-
-    def resize_window(self, w, h, x, y):
-        if self._window:
-            self._window.resize(int(w), int(h))
-            self._window.move(int(x), int(y))
 
 
 # ─── MIDI MONITOR THREAD ──────────────────────────────────────────────────────
@@ -720,12 +733,16 @@ def main():
         base = os.path.dirname(os.path.abspath(__file__))
     html_path = os.path.join(base, "index.html")
 
+    cfg    = load_config()
+    bounds = cfg.get("window_bounds", {})
     window = webview.create_window(
         "MMT",
         url=html_path,
         js_api=api,
-        width=1100,
-        height=700,
+        width=bounds.get("w", 1100),
+        height=bounds.get("h", 700),
+        x=bounds.get("x", None),
+        y=bounds.get("y", None),
         min_size=(800, 540),
         resizable=True,
         frameless=True,
@@ -737,6 +754,16 @@ def main():
     tray = setup_tray(window, midi)
 
     def on_closed():
+        # Save current bounds before exit
+        try:
+            cfg = load_config()
+            cfg["window_bounds"] = {
+                "x": window.x, "y": window.y,
+                "w": window.width, "h": window.height,
+            }
+            save_config(cfg)
+        except Exception:
+            pass
         tray.stop()
         midi.close()
 
