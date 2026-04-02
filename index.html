@@ -559,9 +559,76 @@ nav {
 .sb-item.green { color: var(--sage); }
 .sb-item.gold  { color: var(--gold); }
 .sb-sep { color: var(--text-xdim); opacity: 0.25; }
+
+/* ─── SPLASH ─── */
+.splash {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 48px;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+.splash.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.splash-title {
+  font-size: 32px; font-weight: 300;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--gold);
+  animation: titlePulse 2.4s ease-in-out infinite;
+}
+@keyframes titlePulse {
+  0%,100% { opacity: 1; text-shadow: 0 0 30px rgba(201,169,110,0.4); }
+  50%      { opacity: 0.45; text-shadow: 0 0 8px rgba(201,169,110,0.1); }
+}
+
+.splash-checklist {
+  display: flex; flex-direction: column; gap: 14px;
+  min-width: 300px;
+}
+.splash-item {
+  display: none;
+  align-items: center; gap: 14px;
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.08em; color: var(--text-dim);
+}
+.splash-item.visible { display: flex; }
+.splash-item.done  { color: var(--sage); }
+.splash-item.error { color: #e07070; }
+
+.splash-status-icon {
+  width: 16px; height: 16px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.splash-spinner {
+  width: 11px; height: 11px;
+  border: 1.5px solid rgba(201,169,110,0.15);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.splash-check { color: var(--sage);  font-size: 12px; line-height: 1; }
+.splash-cross { color: #e07070;      font-size: 12px; line-height: 1; }
+
+.splash-error-msg {
+  font-family: var(--mono); font-size: 10px;
+  color: #e07070; letter-spacing: 0.06em;
+  max-width: 340px; text-align: center; line-height: 1.7;
+  display: none;
+}
+.splash-error-msg.visible { display: block; }
 </style>
 </head>
+
 <body>
+
+<!-- ─── SPLASH ─── -->
+<div class="splash" id="splash">
+  <div class="splash-title">MidiWarp</div>
+  <div class="splash-checklist" id="splashList"></div>
+  <div class="splash-error-msg" id="splashError"></div>
+</div>
 
 <!-- Resize handles -->
 <div class="resize-handle resize-n"  data-dir="n"></div>
@@ -937,6 +1004,55 @@ nav {
 </div>
 
 <script>
+
+// ─── SPLASH ──────────────────────────────────────────────────────────────────
+
+// Steps are added dynamically as they appear — nothing visible until Python calls in.
+const splashSteps = {};  // key → { el, labelEl, iconEl }
+
+window.onStartupStep = function(key, label, status, message) {
+  // status: 'active' | 'done' | 'error'
+  let step = splashSteps[key];
+
+  if (!step) {
+    // Create the row the first time this key appears
+    const el = document.createElement('div');
+    el.className = 'splash-item visible';
+    el.innerHTML = `
+      <div class="splash-status-icon" data-icon></div>
+      <span data-label></span>
+    `;
+    document.getElementById('splashList').appendChild(el);
+    step = {
+      el,
+      iconEl:  el.querySelector('[data-icon]'),
+      labelEl: el.querySelector('[data-label]'),
+    };
+    splashSteps[key] = step;
+  }
+
+  step.labelEl.textContent = label;
+  step.el.className = 'splash-item visible ' + (status === 'active' ? '' : status);
+
+  if (status === 'active') {
+    step.iconEl.innerHTML = '<div class="splash-spinner"></div>';
+  } else if (status === 'done') {
+    step.iconEl.innerHTML = '<span class="splash-check">✓</span>';
+  } else if (status === 'error') {
+    step.iconEl.innerHTML = '<span class="splash-cross">✕</span>';
+    if (message) {
+      const err = document.getElementById('splashError');
+      err.textContent = message;
+      err.classList.add('visible');
+    }
+  }
+};
+
+window.onStartupComplete = function() {
+  document.querySelector('.splash-title').style.animation = 'none';
+  document.getElementById('splash').classList.add('hidden');
+};
+
 // ─── PYWEBVIEW BRIDGE ────────────────────────────────────────────────────────
 // All Python calls go through window.pywebview.api.*
 // pywebview isn't ready synchronously, so we wait for the event.

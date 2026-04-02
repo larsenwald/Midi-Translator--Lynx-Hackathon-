@@ -716,15 +716,99 @@ def setup_tray(window, midi, base_dir):
     return icon
 
 
+# ─── STARTUP CHECKS ───────────────────────────────────────────────────────────
+
+import subprocess
+import winreg
+
+LOOPMIDI_PATHS = [
+    r"C:\Program Files (x86)\Tobias Erichsen\loopMIDI\loopMIDI.exe",
+    r"C:\Program Files\Tobias Erichsen\loopMIDI\loopMIDI.exe",
+]
+
+def _push(window, key, label, status, message=None):
+    if not window:
+        return
+    msg_js = f', {json.dumps(message)}' if message else ', null'
+    try:
+        window.evaluate_js(
+            f'window.onStartupStep({json.dumps(key)}, {json.dumps(label)}, {json.dumps(status)}{msg_js})'
+        )
+    except Exception:
+        pass
+
+def _find_loopmidi_exe():
+    for path in LOOPMIDI_PATHS:
+        if os.path.exists(path):
+            return path
+    return None
+
+def run_startup_checks(window, base_dir):
+    """Run pre-flight checks, pushing status to the splash screen as we go."""
+
+    # ── Check 1: loopMIDI installed ──
+    _push(window, 'loopmidi', 'Checking loopMIDI', 'active')
+    exe_path = _find_loopmidi_exe()
+
+    if exe_path:
+        _push(window, 'loopmidi', 'loopMIDI found', 'done')
+    else:
+        # Attempt silent install from bundled setup
+        installer = os.path.join(base_dir, 'loopMIDISetup.exe')
+        if os.path.exists(installer):
+            _push(window, 'loopmidi', 'Installing loopMIDI…', 'active')
+            try:
+                subprocess.call(
+                    [installer, '/silent'],
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                )
+                time.sleep(3)
+                exe_path = _find_loopmidi_exe()
+            except Exception as e:
+                print(f"[Startup] loopMIDI install error: {e}")
+
+        if exe_path:
+            _push(window, 'loopmidi', 'loopMIDI installed', 'done')
+        else:
+            _push(window, 'loopmidi', 'loopMIDI not found', 'error',
+                  'loopMIDI could not be found or installed.\nPlease install it from tobias-erichsen.de')
+            return False, None
+
+    # ── Check 2: MidiWarp_OUT port in registry ──
+    PORTS_KEY = r"Software\Tobias Erichsen\loopMIDI\Ports"
+    _push(window, 'port', 'Checking virtual port', 'active')
+
+    port_existed = False
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, PORTS_KEY) as k:
+            winreg.QueryValueEx(k, OUTPUT_PORT_NAME)
+            port_existed = True
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print(f"[Startup] Port registry read error: {e}")
+
+    if port_existed:
+        _push(window, 'port', 'Virtual port found', 'done')
+    else:
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, PORTS_KEY) as k:
+                winreg.SetValueEx(k, OUTPUT_PORT_NAME, 0, winreg.REG_DWORD, 1)
+            _push(window, 'port', 'Virtual port created', 'done')
+        except Exception as e:
+            _push(window, 'port', 'Virtual port failed', 'error',
+                  f'Could not create {OUTPUT_PORT_NAME} in registry.\n{e}')
+            return False, None
+
+    return True, exe_path
+
+
 # ─── ENTRY POINT ──────────────────────────────────────────────────────────────
 
 def main():
     midi   = MidiHandler()
     engine = ScriptEngine()
     api    = API(midi, engine)
-
-    engine.load_scripts()
-    midi.open_output()
 
     if getattr(sys, "frozen", False):
         base = sys._MEIPASS
@@ -753,7 +837,6 @@ def main():
     tray = setup_tray(window, midi, base)
 
     def on_closed():
-        # Save current bounds before exit
         try:
             cfg = load_config()
             cfg["window_bounds"] = {
@@ -768,11 +851,23 @@ def main():
 
     window.events.closed += on_closed
 
-    t = threading.Thread(target=monitor_loop, args=(midi, engine, api), daemon=True)
-    t.start()
+    def on_loaded():
+        def _run():
+            ok, exe_path = run_startup_checks(window, base)
+            if ok:
+                engine.load_scripts()
+                midi.open_output()
+                try:
+                    window.evaluate_js('window.onStartupComplete()')
+                except Exception:
+                    pass
+                t = threading.Thread(target=monitor_loop, args=(midi, engine, api), daemon=True)
+                t.start()
+                w = threading.Thread(target=port_watchdog, args=(midi, api), daemon=True)
+                w.start()
+        threading.Thread(target=_run, daemon=True).start()
 
-    w = threading.Thread(target=port_watchdog, args=(midi, api), daemon=True)
-    w.start()
+    window.events.loaded += on_loaded
 
     webview.start(debug=False)
 
