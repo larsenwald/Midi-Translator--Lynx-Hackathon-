@@ -17,7 +17,70 @@ OUTPUT_PORT_NAME = "MMT_OUT"  # Your loopMIDI port name — change if needed
 
 DATA_DIR    = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), APP_NAME)
 SCRIPTS_DIR = os.path.join(DATA_DIR, "scripts")
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 os.makedirs(SCRIPTS_DIR, exist_ok=True)
+
+try:
+    from google import genai as google_genai
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
+    print("[AI] google-genai not installed. Run: pip install google-genai")
+
+AI_SYSTEM_PROMPT = """\
+You are an expert at writing MMT (MIDI Mapping Translator) scripts.
+MMT scripts are plain Python files that run on every incoming MIDI event.
+
+AVAILABLE VARIABLES (read/write):
+  event_type : str  — 'note_on', 'note_off', 'control_change', 'pitchwheel', 'program_change'
+  channel    : int  — 1-16
+  note       : int  — 0-127  (note_on / note_off only)
+  velocity   : int  — 0-127  (note_on / note_off only)
+  cc_num     : int  — 0-127  (control_change only)
+  cc_value   : int  — 0-127  (control_change only)
+  pitch      : int  — -8192 to +8191  (pitchwheel only)
+  program    : int  — 0-127  (program_change only)
+
+NOTE NAME CONSTANTS (all available directly, e.g. C4=60, Cs4=61, Db4=61, D4=62 ... up to G9=127):
+  Natural notes: C0, D0, E0, F0, G0, A0, B0, C1 ... etc
+  Sharps: Cs4 = C#4, Ds4 = D#4, Fs4 = F#4, Gs4 = G#4, As4 = A#4
+  Flats:  Db4 = Db4, Eb4, Gb4, Ab4, Bb4  (enharmonic equivalents of sharps)
+
+HELPER FUNCTIONS:
+  send_note_on(note, velocity, channel=None)
+  send_note_off(note, velocity=0, channel=None)
+  send_cc(cc_num, value, channel=None)
+  send_pitchbend(pitch, channel=None)   — pitch: -8192 to +8191
+  send_program_change(program, channel=None)
+  block()  — suppress the original event entirely
+
+RULES:
+- Mutating a variable (e.g. note = 74) rewrites the outgoing message.
+- Calling send_*() emits an additional message alongside the original.
+- Calling block() suppresses the original. Combine with send_*() to replace it.
+- Only access variables that exist for the current event_type. Always guard with if event_type == '...' first.
+- Scripts are stateless — no data persists between events.
+- Do not import anything. Do not use output(). Do not use raw status bytes.
+- Always guard by event_type before accessing event-specific variables.
+
+OUTPUT FORMAT:
+Return ONLY the raw Python script code, no markdown fences, no explanation, no comments unless they aid clarity.
+"""
+
+
+def load_config():
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_config(cfg):
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as e:
+        print(f"[Config] Save error: {e}")
 
 
 # ─── MIDI HANDLER ─────────────────────────────────────────────────────────────
@@ -163,15 +226,18 @@ class ScriptEngine:
             files = sorted(f for f in os.listdir(SCRIPTS_DIR) if f.endswith(".py"))
         except Exception:
             files = []
+        cfg = load_config()
+        enabled_states = cfg.get("script_enabled", {})
         for fname in files:
             path = os.path.join(SCRIPTS_DIR, fname)
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     code = f.read()
+                name = fname[:-3]
                 self.scripts.append({
-                    "name":    fname[:-3],
+                    "name":    name,
                     "code":    code,
-                    "enabled": True,
+                    "enabled": enabled_states.get(name, True),
                 })
                 print(f"[Scripts] Loaded: {fname}")
             except Exception as e:
@@ -200,6 +266,11 @@ class ScriptEngine:
         for s in self.scripts:
             if s["name"] == name:
                 s["enabled"] = enabled
+                cfg = load_config()
+                states = cfg.get("script_enabled", {})
+                states[name] = enabled
+                cfg["script_enabled"] = states
+                save_config(cfg)
                 return
 
     # ── processing ──
@@ -379,6 +450,40 @@ class API:
     def set_script_enabled(self, name, enabled):
         self.engine.set_enabled(name, enabled)
         return True
+
+    def get_api_key_set(self):
+        cfg = load_config()
+        return bool(cfg.get("gemini_api_key", ""))
+
+    def set_api_key(self, key):
+        cfg = load_config()
+        cfg["gemini_api_key"] = key.strip()
+        save_config(cfg)
+        return True
+
+    def generate_script(self, prompt):
+        if not GENAI_AVAILABLE:
+            return {"error": "google-genai not installed. Run: pip install google-genai"}
+        cfg = load_config()
+        api_key = cfg.get("gemini_api_key", "").strip()
+        if not api_key:
+            return {"error": "No API key set. Enter your Gemini API key first."}
+        try:
+            client = google_genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=f"{AI_SYSTEM_PROMPT}\n\nUser request: {prompt}",
+            )
+            code = response.text.strip()
+            # Strip markdown fences if the model included them anyway
+            if code.startswith("```"):
+                lines = code.splitlines()
+                code = "\n".join(
+                    l for l in lines if not l.strip().startswith("```")
+                ).strip()
+            return {"code": code}
+        except Exception as e:
+            return {"error": str(e)}
 
     def move_window(self, x, y):
         if self._window: self._window.move(int(x), int(y))

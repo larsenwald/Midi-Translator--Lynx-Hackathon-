@@ -396,6 +396,119 @@ nav {
 .note-cell-name { font-family: var(--mono); font-size: 10px; color: var(--gold); }
 .note-cell-num  { font-family: var(--mono); font-size: 9px; color: var(--text-dim); }
 
+/* AI generate button variant */
+.ai-btn { border-color: rgba(160,120,144,0.25); color: var(--mauve); }
+.ai-btn:hover { border-color: rgba(160,120,144,0.4); color: var(--mauve); background: var(--mauve-s); }
+
+/* AI modal */
+.ai-modal {
+  display: none;
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: min(620px, 92vw);
+  background: #1e1b17;
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.7);
+  z-index: 501;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalIn 0.22s cubic-bezier(0.16,1,0.3,1);
+}
+.ai-modal.open { display: flex; }
+.ai-modal-body { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 18px; }
+
+/* Key row */
+.ai-key-row { display: flex; flex-direction: column; gap: 7px; }
+.ai-key-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+.ai-key-input-wrap { display: flex; gap: 0; }
+.ai-key-input {
+  flex: 1;
+  padding: 9px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border2);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.ai-key-input:focus { border-color: rgba(160,120,144,0.4); }
+.ai-key-input::placeholder { color: var(--text-xdim); }
+.ai-key-btn {
+  padding: 9px 16px;
+  border: 1px solid var(--border2);
+  border-radius: 0 6px 6px 0;
+  background: var(--mauve-s);
+  color: var(--mauve);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.ai-key-btn:hover { background: rgba(160,120,144,0.2); }
+.ai-key-locked { display: flex; align-items: center; gap: 12px; padding: 9px 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; }
+.ai-key-dots { font-family: var(--mono); font-size: 14px; color: var(--text-dim); letter-spacing: 0.1em; flex: 1; }
+.ai-key-edit { padding: 3px 10px; border: 1px solid var(--border2); border-radius: 4px; background: transparent; font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); cursor: pointer; transition: all 0.15s; }
+.ai-key-edit:hover { color: var(--text); border-color: var(--border2); background: rgba(255,255,255,0.04); }
+
+/* Prompt */
+.ai-prompt-section { display: flex; flex-direction: column; gap: 7px; }
+.ai-prompt-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+.ai-prompt-input {
+  width: 100%;
+  min-height: 90px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.2s;
+  caret-color: var(--mauve);
+}
+.ai-prompt-input:focus { border-color: rgba(160,120,144,0.4); }
+.ai-prompt-input::placeholder { color: var(--text-xdim); }
+.ai-prompt-actions { display: flex; align-items: center; justify-content: space-between; }
+.ai-prompt-hint { font-family: var(--mono); font-size: 9px; color: var(--text-xdim); letter-spacing: 0.06em; }
+.ai-generate-btn {
+  padding: 8px 20px;
+  border: 1px solid rgba(160,120,144,0.3);
+  border-radius: 6px;
+  background: var(--mauve-s);
+  color: var(--mauve);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ai-generate-btn:hover { background: rgba(160,120,144,0.2); border-color: rgba(160,120,144,0.5); }
+.ai-generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ai-generate-btn.loading { animation: pulseMauve 1s ease-in-out infinite; }
+@keyframes pulseMauve { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+/* Result */
+.ai-result { display: flex; flex-direction: column; gap: 0; border: 1px solid rgba(122,158,138,0.2); border-radius: 6px; overflow: hidden; }
+.ai-result-hdr { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: rgba(122,158,138,0.06); border-bottom: 1px solid rgba(122,158,138,0.15); }
+.ai-result-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sage); }
+.ai-result-use { padding: 4px 12px; border: 1px solid rgba(122,158,138,0.3); border-radius: 4px; background: var(--sage-s); color: var(--sage); font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; cursor: pointer; transition: all 0.15s; }
+.ai-result-use:hover { background: rgba(122,158,138,0.18); }
+.ai-result-code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 11px; line-height: 1.8; color: var(--text); background: transparent; white-space: pre; overflow-x: auto; max-height: 220px; overflow-y: auto; }
+
+/* Error */
+.ai-error { padding: 10px 14px; border: 1px solid rgba(193,90,90,0.25); border-radius: 6px; background: rgba(193,90,90,0.06); font-family: var(--mono); font-size: 11px; color: #e07070; line-height: 1.6; }
+
 /* Status bar */
 .status-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 26px; background: rgba(14,12,10,0.85); backdrop-filter: blur(16px); border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 18px; z-index: 200; font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; color: var(--text-xdim); }
 .sb-item { display: flex; align-items: center; gap: 5px; }
@@ -532,6 +645,9 @@ nav {
       <div class="s-sidebar-top">
         <button class="new-script-btn" onclick="newScript()">
           <span style="font-size:15px;line-height:1">+</span> New Script
+        </button>
+        <button class="new-script-btn ai-btn" onclick="openAI()">
+          <span style="font-size:13px;line-height:1">✦</span> Generate with AI
         </button>
       </div>
       <div class="s-list" id="sList"></div>
@@ -703,6 +819,59 @@ nav {
     </div>
   </div>
 
+</div>
+
+<!-- ═══ AI GENERATE MODAL ═══ -->
+<div class="docs-overlay" id="aiOverlay" onclick="closeAI()"></div>
+<div class="ai-modal" id="aiModal">
+  <div class="docs-modal-hdr">
+    <div class="docs-modal-title">Generate Script with AI</div>
+    <button class="docs-close" onclick="closeAI()">✕</button>
+  </div>
+  <div class="ai-modal-body">
+
+    <!-- API key row -->
+    <div class="ai-key-row">
+      <div class="ai-key-label">Gemini API Key</div>
+      <div class="ai-key-input-wrap" id="keyWrap">
+        <input class="ai-key-input" id="keyInput" type="password"
+          placeholder="Paste your key from aistudio.google.com…"
+          onkeydown="onKeyInputKeydown(event)">
+        <button class="ai-key-btn" id="keyBtn" onclick="commitKey()">Save</button>
+      </div>
+      <div class="ai-key-locked" id="keyLocked" style="display:none">
+        <span class="ai-key-dots" id="keyDots">••••••••••••••••</span>
+        <button class="ai-key-edit" onclick="editKey()">Change</button>
+      </div>
+    </div>
+
+    <!-- Prompt area -->
+    <div class="ai-prompt-section">
+      <div class="ai-prompt-label">Describe what you want the script to do</div>
+      <textarea class="ai-prompt-input" id="aiPrompt"
+        placeholder="e.g. Remap all notes on channel 10 up an octave, but only when velocity is above 80…"
+        onkeydown="onPromptKeydown(event)"></textarea>
+      <div class="ai-prompt-actions">
+        <div class="ai-prompt-hint">Shift+Enter to generate</div>
+        <button class="ai-generate-btn" id="generateBtn" onclick="generateScript()">
+          <span id="generateBtnTxt">✦ Generate</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Result preview -->
+    <div class="ai-result" id="aiResult" style="display:none">
+      <div class="ai-result-hdr">
+        <div class="ai-result-label">Generated script</div>
+        <button class="ai-result-use" onclick="useGeneratedScript()">Use this script →</button>
+      </div>
+      <pre class="ai-result-code" id="aiResultCode"></pre>
+    </div>
+
+    <!-- Error -->
+    <div class="ai-error" id="aiError" style="display:none"></div>
+
+  </div>
 </div>
 
 <!-- Status bar -->
@@ -1155,6 +1324,94 @@ function toggleDSL() {
   dslOpen = !dslOpen;
   document.getElementById('dslRef').classList.toggle('open', dslOpen);
   document.getElementById('dslTogBtn').classList.toggle('open', dslOpen);
+}
+
+// ─── AI GENERATE MODAL ───────────────────────────────────────────────────────
+
+let generatedCode = null;
+
+function openAI() {
+  document.getElementById('aiOverlay').classList.add('open');
+  document.getElementById('aiModal').classList.add('open');
+  document.getElementById('aiError').style.display = 'none';
+  document.getElementById('aiResult').style.display = 'none';
+  generatedCode = null;
+  call('get_api_key_set').then(isSet => setKeyUIState(isSet));
+}
+
+function closeAI() {
+  document.getElementById('aiOverlay').classList.remove('open');
+  document.getElementById('aiModal').classList.remove('open');
+}
+
+function setKeyUIState(locked) {
+  document.getElementById('keyWrap').style.display   = locked ? 'none' : 'flex';
+  document.getElementById('keyLocked').style.display = locked ? 'flex' : 'none';
+}
+
+function commitKey() {
+  const val = document.getElementById('keyInput').value.trim();
+  if (!val) return;
+  call('set_api_key', val).then(() => {
+    document.getElementById('keyInput').value = '';
+    setKeyUIState(true);
+  });
+}
+
+function editKey() {
+  setKeyUIState(false);
+  setTimeout(() => document.getElementById('keyInput').focus(), 50);
+}
+
+function onKeyInputKeydown(e) {
+  if (e.key === 'Enter') { e.preventDefault(); commitKey(); }
+}
+
+function onPromptKeydown(e) {
+  if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); generateScript(); }
+}
+
+async function generateScript() {
+  const prompt = document.getElementById('aiPrompt').value.trim();
+  if (!prompt) return;
+
+  const btn = document.getElementById('generateBtn');
+  const txt = document.getElementById('generateBtnTxt');
+  document.getElementById('aiError').style.display = 'none';
+  document.getElementById('aiResult').style.display = 'none';
+  btn.disabled = true;
+  btn.classList.add('loading');
+  txt.textContent = '✦ Generating…';
+
+  const result = await call('generate_script', prompt);
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  txt.textContent = '✦ Generate';
+
+  if (!result || result.error) {
+    const errEl = document.getElementById('aiError');
+    errEl.textContent = (result && result.error) || 'Unknown error. Check your API key.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  generatedCode = result.code;
+  document.getElementById('aiResultCode').textContent = result.code;
+  document.getElementById('aiResult').style.display = 'flex';
+}
+
+async function useGeneratedScript() {
+  if (!generatedCode) return;
+  const name = 'ai_script_' + Date.now();
+  await call('save_script', name, generatedCode);
+  await refreshScripts();
+  const idx = scripts.findIndex(s => s.name === name);
+  if (idx !== -1) {
+    goPage('scripts', document.querySelectorAll('.nav-tab')[1]);
+    openScript(idx);
+  }
+  closeAI();
 }
 
 // ─── WINDOW CONTROLS ─────────────────────────────────────────────────────────
