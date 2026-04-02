@@ -396,6 +396,9 @@ nav {
 .note-cell-name { font-family: var(--mono); font-size: 10px; color: var(--gold); }
 .note-cell-num  { font-family: var(--mono); font-size: 9px; color: var(--text-dim); }
 
+.name-error { height: 0; overflow: hidden; font-family: var(--mono); font-size: 10px; color: #e07070; letter-spacing: 0.06em; padding: 0 22px; transition: height 0.2s, padding 0.2s; border-bottom: 1px solid transparent; flex-shrink: 0; display: flex; align-items: center; }
+.name-error.visible { height: 30px; padding: 0 22px; border-color: rgba(193,90,90,0.15); background: rgba(193,90,90,0.05); }
+
 /* AI generate button variant */
 .ai-btn { border-color: rgba(160,120,144,0.25); color: var(--mauve); }
 .ai-btn:hover { border-color: rgba(160,120,144,0.4); color: var(--mauve); background: var(--mauve-s); }
@@ -673,6 +676,7 @@ nav {
           <button class="ed-btn del" onclick="deleteScript()">Delete</button>
           <button class="ed-btn save" id="saveBtn" onclick="saveScript()">Save</button>
         </div>
+        <div class="name-error" id="nameError"></div>
 
         <div class="dsl-ref" id="dslRef">
           <div class="dsl-ref-inner">
@@ -1253,7 +1257,7 @@ async function toggleActive() {
 }
 
 function onTitleInput() {
-  // Only updates local display; actual rename happens on Save
+  clearNameError();
   const val = document.getElementById('edTitle').value;
   if (activeId !== null) {
     scripts[activeId].name = val;
@@ -1261,13 +1265,46 @@ function onTitleInput() {
   }
 }
 
+const INVALID_NAME_CHARS = /[\\/:*?"<>|]/;
+const RESERVED_NAMES = new Set(['con','prn','aux','nul','com1','com2','com3','com4','com5','com6','com7','com8','com9','lpt1','lpt2','lpt3','lpt4','lpt5','lpt6','lpt7','lpt8','lpt9']);
+
+function validateScriptName(name) {
+  if (!name)                          return 'Script name cannot be empty.';
+  if (name !== name.trim())           return 'Name cannot start or end with spaces.';
+  if (name.endsWith('.'))             return 'Name cannot end with a period.';
+  if (INVALID_NAME_CHARS.test(name))  return 'Name contains invalid characters: \\ / : * ? " < > |';
+  if (RESERVED_NAMES.has(name.toLowerCase())) return `"${name}" is a reserved Windows filename.`;
+  // Collision check — another script with same name (excluding current)
+  const collision = scripts.find((s, i) => i !== activeId && s.name === name);
+  if (collision)                      return `A script named "${name}" already exists.`;
+  return null; // valid
+}
+
+function showNameError(msg) {
+  const el = document.getElementById('nameError');
+  el.textContent = msg;
+  el.classList.add('visible');
+  document.getElementById('edTitle').style.color = '#e07070';
+}
+
+function clearNameError() {
+  const el = document.getElementById('nameError');
+  el.textContent = '';
+  el.classList.remove('visible');
+  document.getElementById('edTitle').style.color = '';
+}
+
 async function saveScript() {
   if (activeId === null) return;
-  const s    = scripts[activeId];
-  const name = document.getElementById('edTitle').value.trim().replace(/\.py$/,'').replace(/\s+/g,'_') || 'untitled';
+
+  const raw  = document.getElementById('edTitle').value;
+  const name = raw.trim().replace(/\.py$/i, '');
   const code = document.getElementById('codeTA').value;
 
-  // If name changed, rename on disk first
+  const err = validateScriptName(name);
+  if (err) { showNameError(err); return; }
+  clearNameError();
+
   if (pendingName && pendingName !== name) {
     await call('rename_script', pendingName, name);
   }
@@ -1275,8 +1312,8 @@ async function saveScript() {
   await call('save_script', name, code);
 
   pendingName    = name;
-  s.name = name;
-  s.code = code;
+  scripts[activeId].name = name;
+  scripts[activeId].code = code;
   renderScriptList();
 
   const btn = document.getElementById('saveBtn');
@@ -1316,6 +1353,16 @@ function handleTab(e) {
     const t = e.target, s = t.selectionStart;
     t.value = t.value.slice(0,s) + '  ' + t.value.slice(t.selectionEnd);
     t.selectionStart = t.selectionEnd = s + 2;
+    syncLN();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    e.preventDefault();
+    document.execCommand('undo');
+    syncLN();
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+    e.preventDefault();
+    document.execCommand('redo');
     syncLN();
   }
 }
