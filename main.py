@@ -864,47 +864,59 @@ def run_startup_checks(window, base_dir):
               'loopMIDI did not start in time. Please launch it manually.')
         return False, None
 
-    # ── Check 4: Restart Windows MIDI service ──
-    _push(window, 'midi-service', 'Restarting MIDI service', 'active')
+    # ── Check 4: Restart Windows MIDI service (if it exists) ──
+    _push(window, 'midi-service', 'Checking MIDI service', 'active')
 
+    midi_svc_exists = False
     try:
-        subprocess.call(
-            ["net", "stop", "midisrv"],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-        )
-        time.sleep(0.5)
-        subprocess.call(
-            ["net", "start", "midisrv"],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-        )
-    except Exception as e:
-        _push(window, 'midi-service', 'MIDI service failed', 'error',
-              f'Could not restart Windows MIDI service.\n{e}')
-        return False, None
+        psutil.win_service_get('midisrv')
+        midi_svc_exists = True
+    except Exception:
+        pass  # Service not installed on this system — skip gracefully
 
-    # Poll until midisrv is running (max 8 seconds)
-    deadline = time.time() + 8
-    svc_up   = False
-    while time.time() < deadline:
-        try:
-            svc = psutil.win_service_get('midisrv')
-            if svc.status() == 'running':
-                svc_up = True
-                break
-        except Exception:
-            pass
-        time.sleep(0.3)
-
-    if svc_up:
-        _push(window, 'midi-service', 'MIDI service running', 'done')
+    if not midi_svc_exists:
+        _push(window, 'midi-service', 'MIDI service not present, skipping', 'done')
     else:
-        _push(window, 'midi-service', 'MIDI service timed out', 'error',
-              'Windows MIDI service did not start in time.')
-        return False, None
+        _push(window, 'midi-service', 'Restarting MIDI service', 'active')
+
+        try:
+            subprocess.call(
+                ["net", "stop", "midisrv"],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+            )
+            time.sleep(0.5)
+            subprocess.call(
+                ["net", "start", "midisrv"],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            _push(window, 'midi-service', 'MIDI service failed', 'error',
+                  f'Could not restart Windows MIDI service.\n{e}')
+            return False, None
+
+        # Poll until midisrv is running (max 8 seconds)
+        deadline = time.time() + 8
+        svc_up   = False
+        while time.time() < deadline:
+            try:
+                svc = psutil.win_service_get('midisrv')
+                if svc.status() == 'running':
+                    svc_up = True
+                    break
+            except Exception:
+                pass
+            time.sleep(0.3)
+
+        if svc_up:
+            _push(window, 'midi-service', 'MIDI service running', 'done')
+        else:
+            _push(window, 'midi-service', 'MIDI service timed out', 'error',
+                  'Windows MIDI service did not start in time.')
+            return False, None
 
     return True, exe_path
 
