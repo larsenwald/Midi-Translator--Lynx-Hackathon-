@@ -9,6 +9,9 @@ import pystray
 from PIL import Image, ImageDraw
 import win32gui
 import win32con
+import win32event
+import win32api
+import winerror
 
 # ─── PATHS ────────────────────────────────────────────────────────────────────
 
@@ -864,66 +867,67 @@ def run_startup_checks(window, base_dir):
               'loopMIDI did not start in time. Please launch it manually.')
         return False, None
 
-    # ── Check 4: Restart Windows MIDI service (if it exists) ──
-    _push(window, 'midi-service', 'Checking MIDI service', 'active')
+    # ── Check 4: Restart Windows MIDI service ──
+    _push(window, 'midi-service', 'Restarting MIDI service', 'active')
 
-    midi_svc_exists = False
     try:
-        psutil.win_service_get('midisrv')
-        midi_svc_exists = True
-    except Exception:
-        pass  # Service not installed on this system — skip gracefully
+        subprocess.call(
+            ["net", "stop", "midisrv"],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+        )
+        time.sleep(0.5)
+        subprocess.call(
+            ["net", "start", "midisrv"],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+        )
+    except Exception as e:
+        _push(window, 'midi-service', 'MIDI service failed', 'error',
+              f'Could not restart Windows MIDI service.\n{e}')
+        return False, None
 
-    if not midi_svc_exists:
-        _push(window, 'midi-service', 'MIDI service not present, skipping', 'done')
-    else:
-        _push(window, 'midi-service', 'Restarting MIDI service', 'active')
-
+    # Poll until midisrv is running (max 8 seconds)
+    deadline = time.time() + 8
+    svc_up   = False
+    while time.time() < deadline:
         try:
-            subprocess.call(
-                ["net", "stop", "midisrv"],
-                creationflags=subprocess.CREATE_NO_WINDOW,
-                stderr=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-            )
-            time.sleep(0.5)
-            subprocess.call(
-                ["net", "start", "midisrv"],
-                creationflags=subprocess.CREATE_NO_WINDOW,
-                stderr=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-            )
-        except Exception as e:
-            _push(window, 'midi-service', 'MIDI service failed', 'error',
-                  f'Could not restart Windows MIDI service.\n{e}')
-            return False, None
+            svc = psutil.win_service_get('midisrv')
+            if svc.status() == 'running':
+                svc_up = True
+                break
+        except Exception:
+            pass
+        time.sleep(0.3)
 
-        # Poll until midisrv is running (max 8 seconds)
-        deadline = time.time() + 8
-        svc_up   = False
-        while time.time() < deadline:
-            try:
-                svc = psutil.win_service_get('midisrv')
-                if svc.status() == 'running':
-                    svc_up = True
-                    break
-            except Exception:
-                pass
-            time.sleep(0.3)
-
-        if svc_up:
-            _push(window, 'midi-service', 'MIDI service running', 'done')
-        else:
-            _push(window, 'midi-service', 'MIDI service timed out', 'error',
-                  'Windows MIDI service did not start in time.')
-            return False, None
+    if svc_up:
+        _push(window, 'midi-service', 'MIDI service running', 'done')
+    else:
+        _push(window, 'midi-service', 'MIDI service timed out', 'error',
+              'Windows MIDI service did not start in time.')
+        return False, None
 
     return True, exe_path
 
 
 # ─── ENTRY POINT ──────────────────────────────────────────────────────────────
 
+def ensure_single_instance():
+    mutex = win32event.CreateMutex(None, False, "MidiWarp_SingleInstance")
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        # Another instance is running — bring it to the foreground and exit
+        hwnd = win32gui.FindWindow(None, "MidiWarp")
+        if hwnd:
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            win32gui.SetForegroundWindow(hwnd)
+        sys.exit(0)
+    return mutex  # keep reference alive for the lifetime of the process
+
+
 def main():
+    mutex = ensure_single_instance()
     midi   = MidiHandler()
     engine = ScriptEngine()
     api    = API(midi, engine)
