@@ -1052,6 +1052,8 @@ window.onStartupStep = function(key, label, status, message) {
 window.onStartupComplete = function() {
   document.querySelector('.splash-title').style.animation = 'none';
   document.getElementById('splash').classList.add('hidden');
+  // Now that Python has finished loading scripts, fetch them
+  refreshScripts();
 };
 
 // ─── PYWEBVIEW BRIDGE ────────────────────────────────────────────────────────
@@ -1067,9 +1069,6 @@ window.addEventListener('pywebviewready', async () => {
   const outName = await api.get_output_port_name();
   document.getElementById('outputChipTxt').textContent = outName;
   document.getElementById('sbOutTxt').textContent = 'Out: ' + outName;
-
-  // Load scripts from disk
-  await refreshScripts();
 });
 
 async function call(method, ...args) {
